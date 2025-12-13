@@ -7,6 +7,7 @@
 
 const path = require("path");
 const { spawn } = require("child_process");
+const fs = require("fs");
 
 // Load environment variables from .env file
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
@@ -30,10 +31,39 @@ function getIconPath() {
 async function startServer() {
   const isDev = !app.isPackaged;
 
-  // Server entry point
-  const serverPath = isDev
-    ? path.join(__dirname, "../../server/dist/index.js")
-    : path.join(process.resourcesPath, "server", "index.js");
+  // Server entry point - use tsx in dev, compiled version in production
+  let command, args, serverPath;
+  if (isDev) {
+    // In development, use tsx to run TypeScript directly
+    // Use the node executable that's running Electron
+    command = process.execPath; // This is the path to node.exe
+    serverPath = path.join(__dirname, "../../server/src/index.ts");
+    
+    // Find tsx CLI - check server node_modules first, then root
+    const serverNodeModules = path.join(__dirname, "../../server/node_modules/tsx");
+    const rootNodeModules = path.join(__dirname, "../../../node_modules/tsx");
+    
+    let tsxCliPath;
+    if (fs.existsSync(path.join(serverNodeModules, "dist/cli.mjs"))) {
+      tsxCliPath = path.join(serverNodeModules, "dist/cli.mjs");
+    } else if (fs.existsSync(path.join(rootNodeModules, "dist/cli.mjs"))) {
+      tsxCliPath = path.join(rootNodeModules, "dist/cli.mjs");
+    } else {
+      // Last resort: try require.resolve
+      try {
+        tsxCliPath = require.resolve("tsx/cli.mjs", { paths: [path.join(__dirname, "../../server")] });
+      } catch {
+        throw new Error("Could not find tsx. Please run 'npm install' in the server directory.");
+      }
+    }
+    
+    args = [tsxCliPath, "watch", serverPath];
+  } else {
+    // In production, use compiled JavaScript
+    command = "node";
+    serverPath = path.join(process.resourcesPath, "server", "index.js");
+    args = [serverPath];
+  }
 
   // Set environment variables for server
   const env = {
@@ -44,7 +74,7 @@ async function startServer() {
 
   console.log("[Electron] Starting backend server...");
 
-  serverProcess = spawn("node", [serverPath], {
+  serverProcess = spawn(command, args, {
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

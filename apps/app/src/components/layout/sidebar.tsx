@@ -32,6 +32,9 @@ import {
   Bug,
   Activity,
   Recycle,
+  Sparkles,
+  Loader2,
+  Terminal,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -72,7 +75,6 @@ import {
   hasAutomakerDir,
 } from "@/lib/project-init";
 import { toast } from "sonner";
-import { Sparkles, Loader2 } from "lucide-react";
 import { themeOptions } from "@/config/theme-options";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { SpecRegenerationEvent } from "@/types/electron";
@@ -608,6 +610,12 @@ export function Sidebar() {
           label: "AI Profiles",
           icon: UserCircle,
           shortcut: shortcuts.profiles,
+        },
+        {
+          id: "terminal",
+          label: "Terminal",
+          icon: Terminal,
+          shortcut: shortcuts.terminal,
         },
       ],
     },
