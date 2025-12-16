@@ -38,8 +38,8 @@ const NAV_ITEMS = [
   { id: "api-keys", label: "API Keys", icon: Key },
   { id: "claude", label: "Claude", icon: Terminal },
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "audio", label: "Audio", icon: Volume2 },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: Settings2 },
+  { id: "audio", label: "Audio", icon: Volume2 },
   { id: "defaults", label: "Feature Defaults", icon: FlaskConical },
   { id: "danger", label: "Danger Zone", icon: Trash2 },
 ];
