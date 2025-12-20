@@ -12,6 +12,7 @@ import type { Request, Response } from "express";
 import type { SettingsService } from "../../../services/settings-service.js";
 import type { ProjectSettings } from "../../../types/settings.js";
 import { getErrorMessage, logError } from "../common.js";
+import { validatePath, PathNotAllowedError } from "../../../lib/security.js";
 
 /**
  * Create handler factory for PUT /api/settings/project
@@ -41,6 +42,20 @@ export function createUpdateProjectHandler(settingsService: SettingsService) {
           error: "updates object is required",
         });
         return;
+      }
+
+      // Validate paths are within ALLOWED_ROOT_DIRECTORY
+      try {
+        validatePath(projectPath);
+      } catch (error) {
+        if (error instanceof PathNotAllowedError) {
+          res.status(403).json({
+            success: false,
+            error: error.message,
+          });
+          return;
+        }
+        throw error;
       }
 
       const settings = await settingsService.updateProjectSettings(

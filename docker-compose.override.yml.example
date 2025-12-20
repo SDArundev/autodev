@@ -8,7 +8,3 @@ services:
       # Set root directory for all projects and file operations
       # Users can only create/open projects within this directory
       - ALLOWED_ROOT_DIRECTORY=/projects
-
-      # Optional: Set workspace directory for UI project discovery
-      # Falls back to ALLOWED_ROOT_DIRECTORY if not set
-      # - WORKSPACE_DIR=/projects

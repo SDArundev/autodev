@@ -12,6 +12,7 @@ import {
   logError,
 } from "../common.js";
 import { generateSuggestions } from "../generate-suggestions.js";
+import { validatePath, PathNotAllowedError } from "../../../lib/security.js";
 
 const logger = createLogger("Suggestions");
 
@@ -26,6 +27,20 @@ export function createGenerateHandler(events: EventEmitter) {
       if (!projectPath) {
         res.status(400).json({ success: false, error: "projectPath required" });
         return;
+      }
+
+      // Validate paths are within ALLOWED_ROOT_DIRECTORY
+      try {
+        validatePath(projectPath);
+      } catch (error) {
+        if (error instanceof PathNotAllowedError) {
+          res.status(403).json({
+            success: false,
+            error: error.message,
+          });
+          return;
+        }
+        throw error;
       }
 
       const { isRunning } = getSuggestionsStatus();
