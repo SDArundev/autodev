@@ -9,7 +9,12 @@ import type { Request, Response } from 'express';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createLogger } from '@automaker/utils';
 import { resolveModelString } from '@automaker/model-resolver';
-import { CLAUDE_MODEL_MAP, isCursorModel, ThinkingLevel } from '@automaker/types';
+import {
+  CLAUDE_MODEL_MAP,
+  isCursorModel,
+  ThinkingLevel,
+  getThinkingTokenBudget,
+} from '@automaker/types';
 import { ProviderFactory } from '../../../providers/provider-factory.js';
 import type { SettingsService } from '../../../services/settings-service.js';
 import { getPromptCustomization } from '../../../lib/settings-helpers.js';
@@ -208,16 +213,22 @@ export function createEnhanceHandler(
         // Use Claude SDK for Claude models
         logger.info(`Using Claude provider for model: ${resolvedModel}`);
 
+        // Convert thinkingLevel to maxThinkingTokens for SDK
+        const maxThinkingTokens = getThinkingTokenBudget(thinkingLevel);
+        const queryOptions: Parameters<typeof query>[0]['options'] = {
+          model: resolvedModel,
+          systemPrompt,
+          maxTurns: 1,
+          allowedTools: [],
+          permissionMode: 'acceptEdits',
+        };
+        if (maxThinkingTokens) {
+          queryOptions.maxThinkingTokens = maxThinkingTokens;
+        }
+
         const stream = query({
           prompt: userPrompt,
-          options: {
-            model: resolvedModel,
-            systemPrompt,
-            maxTurns: 1,
-            allowedTools: [],
-            permissionMode: 'acceptEdits',
-            thinkingLevel: thinkingLevel, // Pass thinking level for Claude models
-          },
+          options: queryOptions,
         });
 
         enhancedText = await extractTextFromStream(stream);
