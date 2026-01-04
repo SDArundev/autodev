@@ -97,7 +97,12 @@ export async function* spawnJSONLProcess(options: SubprocessOptions): AsyncGener
       }
       childProcess.kill('SIGTERM');
     };
-    abortController.signal.addEventListener('abort', abortHandler);
+    // Check if already aborted, if so call handler immediately
+    if (abortController.signal.aborted) {
+      abortHandler();
+    } else {
+      abortController.signal.addEventListener('abort', abortHandler);
+    }
   }
 
   // Helper to clean up abort listener

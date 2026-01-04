@@ -245,7 +245,7 @@ describe('subprocess.ts', () => {
       const mockProcess = createMockProcess({
         stdoutLines: ['{"type":"start"}'],
         exitCode: 0,
-        delayMs: 100, // Delay to allow abort
+        delayMs: 200, // Delay to allow abort
       });
 
       vi.mocked(cp.spawn).mockReturnValue(mockProcess);
@@ -258,8 +258,11 @@ describe('subprocess.ts', () => {
       // Start consuming the generator
       const promise = collectAsyncGenerator(generator);
 
-      // Abort after a short delay
-      setTimeout(() => abortController.abort(), 20);
+      // Abort after a short delay to ensure generator has started
+      // Use setImmediate to ensure the generator has started processing
+      setImmediate(() => {
+        abortController.abort();
+      });
 
       await promise;
 
