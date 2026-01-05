@@ -42,10 +42,12 @@
     "lint": "npm run lint --workspace=apps/ui",
     "test": "npm run test --workspace=apps/ui",
     "test:headed": "npm run test:headed --workspace=apps/ui",
-    "test:server": "npm run test --workspace=apps/server",
-    "test:server:coverage": "npm run test:cov --workspace=apps/server",
-    "test:packages": "npm run test -w @automaker/types -w @automaker/utils -w @automaker/prompts -w @automaker/platform -w @automaker/model-resolver -w @automaker/dependency-resolver -w @automaker/git-utils --if-present",
-    "test:all": "npm run test:packages && npm run test:server",
+    "test:packages": "vitest run --project='!server'",
+    "test:server": "vitest run --project=server",
+    "test:server:coverage": "vitest run --project=server --coverage",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:all": "vitest run",
     "lint:lockfile": "node scripts/lint-lockfile.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -64,6 +66,7 @@
   "devDependencies": {
     "husky": "9.1.7",
     "lint-staged": "16.2.7",
-    "prettier": "3.7.4"
+    "prettier": "3.7.4",
+    "vitest": "4.0.16"
   }
 }
