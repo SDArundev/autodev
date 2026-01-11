@@ -33,6 +33,7 @@ import {
   PlanningModeSelect,
   EnhanceWithAI,
   EnhancementHistoryButton,
+  type EnhancementMode,
 } from '../shared';
 import type { WorkMode } from '../shared';
 import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
@@ -63,7 +64,7 @@ interface EditFeatureDialogProps {
       requirePlanApproval: boolean;
     },
     descriptionHistorySource?: 'enhance' | 'edit',
-    enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer'
+    enhancementMode?: EnhancementMode
   ) => void;
   categorySuggestions: string[];
   branchSuggestions: string[];
@@ -112,7 +113,7 @@ export function EditFeatureDialog({
 
   // Track the source of description changes for history
   const [descriptionChangeSource, setDescriptionChangeSource] = useState<
-    { source: 'enhance'; mode: 'improve' | 'technical' | 'simplify' | 'acceptance' } | 'edit' | null
+    { source: 'enhance'; mode: EnhancementMode } | 'edit' | null
   >(null);
   // Track the original description when the dialog opened for comparison
   const [originalDescription, setOriginalDescription] = useState(feature?.description ?? '');

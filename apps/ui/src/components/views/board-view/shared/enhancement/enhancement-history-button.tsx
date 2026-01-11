@@ -54,7 +54,9 @@ export function EnhancementHistoryButton<T extends BaseHistoryEntry>({
       return 'Original';
     }
     if (entry.source === 'enhance') {
-      return `Enhanced (${ENHANCEMENT_MODE_LABELS[entry.enhancementMode ?? 'improve']})`;
+      const mode = entry.enhancementMode ?? 'improve';
+      const label = ENHANCEMENT_MODE_LABELS[mode as EnhancementMode] ?? mode;
+      return `Enhanced (${label})`;
     }
     return 'Edited';
   };

@@ -18,18 +18,20 @@ import {
 } from '@/components/ui/description-image-dropzone';
 import { MessageSquare } from 'lucide-react';
 import { Feature } from '@/store/app-store';
-import { EnhanceWithAI, EnhancementHistoryButton, type EnhancementMode } from '../shared';
+import {
+  EnhanceWithAI,
+  EnhancementHistoryButton,
+  type EnhancementMode,
+  type BaseHistoryEntry,
+} from '../shared';
 
 const logger = createLogger('FollowUpDialog');
 
 /**
  * A single entry in the follow-up prompt history
  */
-export interface FollowUpHistoryEntry {
+export interface FollowUpHistoryEntry extends BaseHistoryEntry {
   prompt: string;
-  timestamp: string; // ISO date string
-  source: 'initial' | 'enhance' | 'edit';
-  enhancementMode?: EnhancementMode;
 }
 
 interface FollowUpDialogProps {

@@ -91,6 +91,13 @@ interface AddFeatureDialogProps {
   allFeatures?: Feature[];
 }
 
+/**
+ * A single entry in the description history
+ */
+interface DescriptionHistoryEntry extends BaseHistoryEntry {
+  description: string;
+}
+
 export function AddFeatureDialog({
   open,
   onOpenChange,
@@ -135,9 +142,6 @@ export function AddFeatureDialog({
   const [descriptionError, setDescriptionError] = useState(false);
 
   // Description history state
-  interface DescriptionHistoryEntry extends BaseHistoryEntry {
-    description: string;
-  }
   const [descriptionHistory, setDescriptionHistory] = useState<DescriptionHistoryEntry[]>([]);
 
   // Spawn mode state
