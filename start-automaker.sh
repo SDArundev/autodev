@@ -64,10 +64,11 @@ C_MUTE="${ESC}[38;5;248m"  # Muted gray
 # ARGUMENT PARSING
 # ============================================================================
 
-MODE="${1:-}"
+MODE=""
 USE_COLORS=true
 CHECK_DEPS=false
 NO_HISTORY=false
+PRODUCTION_MODE=false
 
 show_help() {
     cat << 'EOF'
@@ -88,10 +89,13 @@ OPTIONS:
   --no-colors      Disable colored output
   --check-deps     Check dependencies before launching
   --no-history     Don't remember last choice
+  --production     Run in production mode (builds first, faster React)
 
 EXAMPLES:
-  start-automaker.sh              # Interactive menu
-  start-automaker.sh web          # Launch web mode directly
+  start-automaker.sh              # Interactive menu (development)
+  start-automaker.sh --production # Interactive menu (production)
+  start-automaker.sh web          # Launch web mode directly (dev)
+  start-automaker.sh web --production  # Launch web mode (production)
   start-automaker.sh electron     # Launch desktop app directly
   start-automaker.sh docker       # Launch Docker dev container
   start-automaker.sh --version    # Show version
@@ -139,6 +143,9 @@ parse_args() {
                 ;;
             --no-history)
                 NO_HISTORY=true
+                ;;
+            --production)
+                PRODUCTION_MODE=true
                 ;;
             web|electron|docker|docker-electron)
                 MODE="$1"
@@ -241,8 +248,8 @@ check_running_electron() {
             printf "%${choice_pad}s" ""
             read -r -p "Choice: " choice
 
-            case "${choice,,}" in
-                k|kill)
+            case "$choice" in
+                [kK]|[kK][iI][lL][lL])
                     echo ""
                     center_print "Killing Electron processes..." "$C_YELLOW"
                     if [ "$IS_WINDOWS" = true ]; then
@@ -257,13 +264,13 @@ check_running_electron() {
                     echo ""
                     return 0
                     ;;
-                i|ignore)
+                [iI]|[iI][gG][nN][oO][rR][eE])
                     echo ""
                     center_print "Continuing without stopping Electron..." "$C_MUTE"
                     echo ""
                     return 0
                     ;;
-                c|cancel)
+                [cC]|[cC][aA][nN][cC][eE][lL])
                     echo ""
                     center_print "Cancelled." "$C_MUTE"
                     echo ""
@@ -308,8 +315,8 @@ check_running_containers() {
             printf "%${choice_pad}s" ""
             read -r -p "Choice: " choice
 
-            case "${choice,,}" in
-                s|stop)
+            case "$choice" in
+                [sS]|[sS][tT][oO][pP])
                     echo ""
                     center_print "Stopping existing containers..." "$C_YELLOW"
                     docker compose -f "$compose_file" down 2>/dev/null || true
@@ -319,7 +326,7 @@ check_running_containers() {
                     echo ""
                     return 0  # Continue with fresh start
                     ;;
-                r|restart)
+                [rR]|[rR][eE][sS][tT][aA][rR][tT])
                     echo ""
                     center_print "Stopping and rebuilding containers..." "$C_YELLOW"
                     docker compose -f "$compose_file" down 2>/dev/null || true
@@ -327,13 +334,13 @@ check_running_containers() {
                     echo ""
                     return 0  # Continue with rebuild
                     ;;
-                a|attach)
+                [aA]|[aA][tT][tT][aA][cC][hH])
                     echo ""
                     center_print "Attaching to existing containers..." "$C_GREEN"
                     echo ""
                     return 2  # Special code for attach
                     ;;
-                c|cancel)
+                [cC]|[cC][aA][nN][cC][eE][lL])
                     echo ""
                     center_print "Cancelled." "$C_MUTE"
                     echo ""
@@ -430,7 +437,7 @@ kill_port() {
 
 check_ports() {
     show_cursor
-    stty echo 2>/dev/null || true
+    stty echo icanon 2>/dev/null || true
 
     local web_in_use=false
     local server_in_use=false
@@ -458,8 +465,8 @@ check_ports() {
 
         while true; do
             read -r -p "What would you like to do? (k)ill processes, (u)se different ports, or (c)ancel: " choice
-            case "${choice,,}" in
-                k|kill)
+            case "$choice" in
+                [kK]|[kK][iI][lL][lL])
                     if [ "$web_in_use" = true ]; then
                         kill_port "$DEFAULT_WEB_PORT"
                     else
@@ -472,7 +479,7 @@ check_ports() {
                     fi
                     break
                     ;;
-                u|use)
+                [uU]|[uU][sS][eE])
                     read -r -p "Enter web port (default $DEFAULT_WEB_PORT): " input_web
                     WEB_PORT=${input_web:-$DEFAULT_WEB_PORT}
                     read -r -p "Enter server port (default $DEFAULT_SERVER_PORT): " input_server
@@ -480,7 +487,7 @@ check_ports() {
                     echo "${C_GREEN}Using ports: Web=$WEB_PORT, Server=$SERVER_PORT${RESET}"
                     break
                     ;;
-                c|cancel)
+                [cC]|[cC][aA][nN][cC][eE][lL])
                     echo "${C_MUTE}Cancelled.${RESET}"
                     exit 0
                     ;;
@@ -496,7 +503,7 @@ check_ports() {
     fi
 
     hide_cursor
-    stty -echo 2>/dev/null || true
+    stty -echo -icanon 2>/dev/null || true
 }
 
 validate_terminal_size() {
@@ -530,7 +537,12 @@ show_cursor() {
 
 cleanup() {
     show_cursor
-    stty echo 2>/dev/null || true
+    # Restore terminal settings (echo and canonical mode)
+    stty echo icanon 2>/dev/null || true
+    # Kill server process if running in production mode
+    if [ -n "${SERVER_PID:-}" ]; then
+        kill $SERVER_PID 2>/dev/null || true
+    fi
     printf "${RESET}\n"
 }
 
@@ -586,10 +598,16 @@ show_header() {
     echo -e "${pad}${C_ACC}${l3}${RESET}"
 
     echo ""
-    local sub_display_len=46
+    local mode_indicator=""
+    if [ "$PRODUCTION_MODE" = true ]; then
+        mode_indicator="${C_GREEN}[PRODUCTION]${RESET}"
+    else
+        mode_indicator="${C_YELLOW}[DEVELOPMENT]${RESET}"
+    fi
+    local sub_display_len=60
     local sub_pad=$(( (TERM_COLS - sub_display_len) / 2 ))
     printf "%${sub_pad}s" ""
-    echo -e "${C_MUTE}Autonomous AI Development Studio${RESET}  ${C_GRAY}│${RESET}  ${C_GREEN}${VERSION}${RESET}"
+    echo -e "${C_MUTE}Autonomous AI Development Studio${RESET}  ${C_GRAY}│${RESET}  ${C_GREEN}${VERSION}${RESET}  ${mode_indicator}"
 
     echo ""
     echo ""
@@ -621,10 +639,10 @@ show_menu() {
     [[ -z "$sel3" ]] && sel3="  ${C_MUTE}"
     [[ -z "$sel4" ]] && sel4="  ${C_MUTE}"
 
-    printf "%s${border}${sel1}[1]${RESET} 🌐  ${txt1}Web Browser${RESET}       ${C_MUTE}localhost:$WEB_PORT${RESET}             ${border}\n" "$pad"
-    printf "%s${border}${sel2}[2]${RESET} 🖥   ${txt2}Desktop App${RESET}       ${DIM}Electron${RESET}                    ${border}\n" "$pad"
-    printf "%s${border}${sel3}[3]${RESET} 🐳  ${txt3}Docker Dev${RESET}        ${DIM}Live Reload${RESET}                 ${border}\n" "$pad"
-    printf "%s${border}${sel4}[4]${RESET} 🔗  ${txt4}Electron+Docker${RESET}   ${DIM}Local UI, Container API${RESET}     ${border}\n" "$pad"
+    printf "%s${border}${sel1}[1]${RESET} 🌐  ${txt1}Web App${RESET}           ${C_MUTE}Server + Browser (localhost:$WEB_PORT)${RESET}  ${border}\n" "$pad"
+    printf "%s${border}${sel2}[2]${RESET} 🖥   ${txt2}Electron${RESET}          ${DIM}Desktop App (embedded server)${RESET}   ${border}\n" "$pad"
+    printf "%s${border}${sel3}[3]${RESET} 🐳  ${txt3}Docker${RESET}            ${DIM}Full Stack (live reload)${RESET}        ${border}\n" "$pad"
+    printf "%s${border}${sel4}[4]${RESET} 🔗  ${txt4}Electron & Docker${RESET}   ${DIM}Desktop + Docker Server${RESET}         ${border}\n" "$pad"
 
     printf "%s${C_GRAY}├" "$pad"
     draw_line "─" "$C_GRAY" "$MENU_INNER_WIDTH"
@@ -637,7 +655,7 @@ show_menu() {
     printf "╯${RESET}\n"
 
     echo ""
-    local footer_text="[↑↓] Navigate  [Enter] Select  [1-4] Jump  [Q] Exit"
+    local footer_text="[↑↓] Navigate  [Enter] Select  [1-4] Quick Select  [Q] Exit"
     local f_pad=$(( (TERM_COLS - ${#footer_text}) / 2 ))
     printf "%${f_pad}s" ""
     echo -e "${DIM}${footer_text}${RESET}"
@@ -696,7 +714,7 @@ center_print() {
 resolve_port_conflicts() {
     # Ensure terminal is in proper state for input
     show_cursor
-    stty echo 2>/dev/null || true
+    stty echo icanon 2>/dev/null || true
 
     local web_in_use=false
     local server_in_use=false
@@ -735,8 +753,8 @@ resolve_port_conflicts() {
             printf "%${choice_pad}s" ""
             read -r -p "Choice: " choice
 
-            case "${choice,,}" in
-                k|kill)
+            case "$choice" in
+                [kK]|[kK][iI][lL][lL])
                     echo ""
                     if [ "$web_in_use" = true ]; then
                         center_print "Killing process(es) on port $DEFAULT_WEB_PORT..." "$C_YELLOW"
@@ -750,7 +768,7 @@ resolve_port_conflicts() {
                     fi
                     break
                     ;;
-                u|use)
+                [uU]|[uU][sS][eE])
                     echo ""
                     local input_pad=$(( (TERM_COLS - 40) / 2 ))
                     printf "%${input_pad}s" ""
@@ -762,7 +780,7 @@ resolve_port_conflicts() {
                     center_print "Using ports: Web=$WEB_PORT, Server=$SERVER_PORT" "$C_GREEN"
                     break
                     ;;
-                c|cancel)
+                [cC]|[cC][aA][nN][cC][eE][lL])
                     echo ""
                     center_print "Cancelled." "$C_MUTE"
                     echo ""
@@ -780,7 +798,7 @@ resolve_port_conflicts() {
 
     # Restore terminal state
     hide_cursor
-    stty -echo 2>/dev/null || true
+    stty -echo -icanon 2>/dev/null || true
 }
 
 launch_sequence() {
@@ -841,10 +859,60 @@ get_last_mode_from_history() {
 }
 
 # ============================================================================
+# PRODUCTION BUILD
+# ============================================================================
+
+build_for_production() {
+    echo ""
+    center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
+    center_print "Building for Production" "$C_PRI"
+    center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
+    echo ""
+
+    center_print "Building shared packages..." "$C_YELLOW"
+    if ! npm run build:packages; then
+        center_print "✗ Failed to build packages" "$C_RED"
+        exit 1
+    fi
+    center_print "✓ Packages built" "$C_GREEN"
+    echo ""
+
+    center_print "Building server..." "$C_YELLOW"
+    if ! npm run build --workspace=apps/server; then
+        center_print "✗ Failed to build server" "$C_RED"
+        exit 1
+    fi
+    center_print "✓ Server built" "$C_GREEN"
+    echo ""
+
+    center_print "Building UI..." "$C_YELLOW"
+    if ! npm run build --workspace=apps/ui; then
+        center_print "✗ Failed to build UI" "$C_RED"
+        exit 1
+    fi
+    center_print "✓ UI built" "$C_GREEN"
+    echo ""
+
+    center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
+    center_print "Build Complete" "$C_GREEN"
+    center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
+    echo ""
+}
+
+# Ensure production env is applied consistently for builds and runtime
+apply_production_env() {
+    if [ "$PRODUCTION_MODE" = true ]; then
+        export NODE_ENV="production"
+    fi
+}
+
+# ============================================================================
 # MAIN EXECUTION
 # ============================================================================
 
 parse_args "$@"
+
+apply_production_env
 
 # Pre-flight checks
 check_platform
@@ -856,31 +924,39 @@ if [ "$CHECK_DEPS" = true ]; then
 fi
 
 hide_cursor
-stty -echo 2>/dev/null || true
+# Disable echo and line buffering for single-key input
+stty -echo -icanon 2>/dev/null || true
 
 # Function to read a single key, handling escape sequences for arrows
+# Note: bash 3.2 (macOS) doesn't support fractional timeouts, so we use a different approach
 read_key() {
     local key
-    local extra
+    local escape_seq=""
 
     if [ -n "$ZSH_VERSION" ]; then
         read -k 1 -s -t "$INPUT_TIMEOUT" key 2>/dev/null || key=""
     else
-        read -n 1 -s -t "$INPUT_TIMEOUT" -r key 2>/dev/null || key=""
+        # Use IFS= to preserve special characters
+        IFS= read -n 1 -s -t "$INPUT_TIMEOUT" -r key 2>/dev/null || key=""
     fi
 
-    # Check for escape sequence (arrow keys)
+    # Check for escape sequence (arrow keys send ESC [ A/B/C/D)
     if [[ "$key" == $'\x1b' ]]; then
-        read -n 1 -s -t 0.1 extra 2>/dev/null || extra=""
-        if [[ "$extra" == "[" ]] || [[ "$extra" == "O" ]]; then
-            read -n 1 -s -t 0.1 extra 2>/dev/null || extra=""
-            case "$extra" in
-                A) echo "UP" ;;
-                B) echo "DOWN" ;;
-                *) echo "" ;;
+        # Read the rest of the escape sequence without timeout
+        # Arrow keys send 3 bytes: ESC [ A/B/C/D
+        IFS= read -n 1 -s -r escape_seq 2>/dev/null || escape_seq=""
+        if [[ "$escape_seq" == "[" ]] || [[ "$escape_seq" == "O" ]]; then
+            IFS= read -n 1 -s -r escape_seq 2>/dev/null || escape_seq=""
+            case "$escape_seq" in
+                A) echo "UP"; return ;;
+                B) echo "DOWN"; return ;;
+                C) echo "RIGHT"; return ;;
+                D) echo "LEFT"; return ;;
             esac
-            return
         fi
+        # Just ESC key pressed
+        echo "ESC"
+        return
     fi
 
     echo "$key"
@@ -946,12 +1022,12 @@ esac
 # Check Docker for Docker modes
 if [[ "$MODE" == "docker" || "$MODE" == "docker-electron" ]]; then
     show_cursor
-    stty echo 2>/dev/null || true
+    stty echo icanon 2>/dev/null || true
     if ! check_docker; then
         exit 1
     fi
     hide_cursor
-    stty -echo 2>/dev/null || true
+    stty -echo -icanon 2>/dev/null || true
 fi
 
 # Save to history
@@ -962,16 +1038,118 @@ launch_sequence "$MODE_NAME"
 
 # Restore terminal state before running npm
 show_cursor
-stty echo 2>/dev/null || true
+stty echo icanon 2>/dev/null || true
+
+# Build for production if needed
+if [ "$PRODUCTION_MODE" = true ]; then
+    build_for_production
+fi
 
 # Execute the appropriate command
 case $MODE in
     web)
         export TEST_PORT="$WEB_PORT"
         export VITE_SERVER_URL="http://localhost:$SERVER_PORT"
-        npm run dev:web
+        export PORT="$SERVER_PORT"
+        export CORS_ORIGIN="http://localhost:$WEB_PORT,http://127.0.0.1:$WEB_PORT"
+        export VITE_APP_MODE="1"
+
+        if [ "$PRODUCTION_MODE" = true ]; then
+            # Production: run built server and UI preview concurrently
+            echo ""
+            center_print "Starting server on port $SERVER_PORT..." "$C_YELLOW"
+            npm run start --workspace=apps/server &
+            SERVER_PID=$!
+
+            # Wait for server to be healthy
+            echo ""
+            center_print "Waiting for server to be ready..." "$C_YELLOW"
+            max_retries=30
+            server_ready=false
+            for ((i=0; i<max_retries; i++)); do
+                if curl -s "http://localhost:$SERVER_PORT/api/health" > /dev/null 2>&1; then
+                    server_ready=true
+                    break
+                fi
+                sleep 1
+            done
+
+            if [ "$server_ready" = false ]; then
+                center_print "✗ Server failed to start" "$C_RED"
+                kill $SERVER_PID 2>/dev/null || true
+                exit 1
+            fi
+            center_print "✓ Server is ready!" "$C_GREEN"
+            echo ""
+
+            # Start UI preview
+            center_print "Starting UI preview on port $WEB_PORT..." "$C_YELLOW"
+            npm run preview --workspace=apps/ui -- --port "$WEB_PORT"
+
+            # Cleanup server on exit
+            kill $SERVER_PID 2>/dev/null || true
+        else
+            # Development: build packages, start server, then start UI with Vite dev server
+            echo ""
+            center_print "Building shared packages..." "$C_YELLOW"
+            npm run build:packages
+            center_print "✓ Packages built" "$C_GREEN"
+            echo ""
+
+            # Start backend server in dev mode (background)
+            center_print "Starting backend server on port $SERVER_PORT..." "$C_YELLOW"
+            npm run _dev:server &
+            SERVER_PID=$!
+
+            # Wait for server to be healthy
+            center_print "Waiting for server to be ready..." "$C_YELLOW"
+            max_retries=30
+            server_ready=false
+            for ((i=0; i<max_retries; i++)); do
+                if curl -s "http://localhost:$SERVER_PORT/api/health" > /dev/null 2>&1; then
+                    server_ready=true
+                    break
+                fi
+                sleep 1
+                printf "."
+            done
+            echo ""
+
+            if [ "$server_ready" = false ]; then
+                center_print "✗ Server failed to start" "$C_RED"
+                kill $SERVER_PID 2>/dev/null || true
+                exit 1
+            fi
+            center_print "✓ Server is ready!" "$C_GREEN"
+            echo ""
+
+            center_print "The application will be available at: http://localhost:$WEB_PORT" "$C_GREEN"
+            echo ""
+
+            # Start web app with Vite dev server (HMR enabled)
+            export VITE_APP_MODE="1"
+            npm run _dev:web
+        fi
         ;;
     electron)
+        # Set environment variables for Electron (it starts its own server)
+        export TEST_PORT="$WEB_PORT"
+        export PORT="$SERVER_PORT"
+        export VITE_SERVER_URL="http://localhost:$SERVER_PORT"
+        export CORS_ORIGIN="http://localhost:$WEB_PORT,http://127.0.0.1:$WEB_PORT"
+        export VITE_APP_MODE="2"
+
+        if [ "$PRODUCTION_MODE" = true ]; then
+            # For production electron, we'd normally use the packaged app
+            # For now, run in dev mode but with production-built packages
+            center_print "Note: For production Electron, use the packaged app" "$C_YELLOW"
+            center_print "Running with production-built packages..." "$C_MUTE"
+            echo ""
+        fi
+
+        center_print "Launching Desktop Application..." "$C_YELLOW"
+        center_print "(Electron will start its own backend server)" "$C_MUTE"
+        echo ""
         npm run dev:electron
         ;;
     docker)
@@ -1100,7 +1278,7 @@ case $MODE in
 
         # Build packages and launch Electron
         npm run build:packages
-        SKIP_EMBEDDED_SERVER=true PORT=$DEFAULT_SERVER_PORT VITE_SERVER_URL="http://localhost:$DEFAULT_SERVER_PORT" npm run _dev:electron
+        SKIP_EMBEDDED_SERVER=true PORT=$DEFAULT_SERVER_PORT VITE_SERVER_URL="http://localhost:$DEFAULT_SERVER_PORT" VITE_APP_MODE="4" npm run _dev:electron
 
         # Cleanup docker when electron exits
         echo ""
