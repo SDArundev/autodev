@@ -37,6 +37,11 @@ DEFAULT_SERVER_PORT=3008
 WEB_PORT=$DEFAULT_WEB_PORT
 SERVER_PORT=$DEFAULT_SERVER_PORT
 
+# Hostname configuration
+# Use VITE_HOSTNAME if explicitly set, otherwise default to localhost
+# Note: Don't use $HOSTNAME as it's a bash built-in containing the machine's hostname
+APP_HOST="${VITE_HOSTNAME:-localhost}"
+
 # Extract VERSION from apps/ui/package.json (the actual app version, not monorepo version)
 if command -v node &> /dev/null; then
     VERSION="v$(node -p "require('$SCRIPT_DIR/apps/ui/package.json').version" 2>/dev/null || echo "0.11.0")"
@@ -850,7 +855,7 @@ launch_sequence() {
 
     case "$MODE" in
         web)
-            local url="http://localhost:$WEB_PORT"
+            local url="http://${APP_HOST}:$WEB_PORT"
             local upad=$(( (TERM_COLS - ${#url} - 10) / 2 ))
             echo ""
             printf "%${upad}s${DIM}Opening ${C_SEC}%s${RESET}\n" "" "$url"
@@ -1073,9 +1078,14 @@ fi
 case $MODE in
     web)
         export TEST_PORT="$WEB_PORT"
-        export VITE_SERVER_URL="http://$HOSTNAME:$SERVER_PORT"
+        export VITE_SERVER_URL="http://${APP_HOST}:$SERVER_PORT"
         export PORT="$SERVER_PORT"
-        export CORS_ORIGIN="http://$HOSTNAME:$WEB_PORT,http://127.0.0.1:$WEB_PORT"
+        # Always include localhost and 127.0.0.1 for local dev, plus custom hostname if different
+        CORS_ORIGINS="http://localhost:$WEB_PORT,http://127.0.0.1:$WEB_PORT"
+        if [[ "$APP_HOST" != "localhost" && "$APP_HOST" != "127.0.0.1" ]]; then
+            CORS_ORIGINS="${CORS_ORIGINS},http://${APP_HOST}:$WEB_PORT"
+        fi
+        export CORS_ORIGIN="$CORS_ORIGINS"
         export VITE_APP_MODE="1"
 
         if [ "$PRODUCTION_MODE" = true ]; then
@@ -1091,7 +1101,7 @@ case $MODE in
             max_retries=30
             server_ready=false
             for ((i=0; i<max_retries; i++)); do
-                if curl -s "http://$HOSTNAME:$SERVER_PORT/api/health" > /dev/null 2>&1; then
+                if curl -s "http://localhost:$SERVER_PORT/api/health" > /dev/null 2>&1; then
                     server_ready=true
                     break
                 fi
@@ -1147,7 +1157,7 @@ case $MODE in
             center_print "✓ Server is ready!" "$C_GREEN"
             echo ""
 
-            center_print "The application will be available at: http://localhost:$WEB_PORT" "$C_GREEN"
+            center_print "The application will be available at: http://${APP_HOST}:$WEB_PORT" "$C_GREEN"
             echo ""
 
             # Start web app with Vite dev server (HMR enabled)
